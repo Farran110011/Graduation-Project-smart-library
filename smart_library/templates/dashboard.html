@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard — Smart Library{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>Librarian Dashboard</h1>
+    <p class="subtitle">Welcome, {{ session['username'] }}</p>
+
+    <!-- ── Stats cards ──────────────────────────────────── -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ total_books }}</div>
+            <div class="stat-label">Total Books</div>
+        </div>
+        <div class="stat-card stat-success">
+            <div class="stat-number">{{ on_shelf }}</div>
+            <div class="stat-label">On Shelf</div>
+        </div>
+        <div class="stat-card stat-warning">
+            <div class="stat-number">{{ misplaced_count }}</div>
+            <div class="stat-label">Misplaced</div>
+        </div>
+        <div class="stat-card stat-info">
+            <div class="stat-number">{{ borrowed_count }}</div>
+            <div class="stat-label">Borrowed</div>
+        </div>
+    </div>
+
+    <!-- ── Misplaced books alert ────────────────────────── -->
+    {% if misplaced_books %}
+    <section class="section">
+        <h2>Misplaced Books</h2>
+        <table class="books-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>RFID Tag</th>
+                    <th>Expected</th>
+                    <th>Found On</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for book in misplaced_books %}
+                <tr class="row-warning">
+                    <td>{{ book.title }}</td>
+                    <td>{{ book.author }}</td>
+                    <td><code>{{ book.rfid_tag }}</code></td>
+                    <td>{{ book.expected_shelf }}</td>
+                    <td>{{ book.current_shelf }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    <section class="section">
+        <h2>Borrow a Book</h2>
+        <form method="POST" action="{{ url_for('books.borrow') }}" class="borrow-form" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <select name="book_id" required>
+                <option value="">Select a book</option>
+                {% for b in available_books %}
+                <option value="{{ b.id }}">{{ b.title }}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="university_id" placeholder="Student University ID" required>
+            <button type="submit" class="btn">Borrow</button>
+        </form>
+    </section>
+
+    <!-- ── Active borrowings ────────────────────────────── -->
+    <section class="section">
+        <h2>Active Borrowings</h2>
+        {% if active_borrowings %}
+        <table class="books-table">
+            <thead>
+                <tr>
+                    <th>Book</th>
+                    <th>Student</th>
+                    <th>ID</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for br in active_borrowings %}
+                <tr class="{{ 'row-danger' if br.status == 'overdue' else '' }}">
+                    <td>{{ br.title }}</td>
+                    <td>{{ br.student_name }}</td>
+                    <td>{{ br.university_id }}</td>
+                    <td>{{ br.due_date }}</td>
+                    <td>
+                        <span class="badge badge-{{ 'danger' if br.status == 'overdue' else 'info' }}">
+                            {{ br.status }}
+                        </span>
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('books.return_book', borrowing_id=br.id) }}" style="display:inline">
+                            <button type="submit" class="btn btn-sm">Return</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No active borrowings.</p>
+        {% endif %}
+    </section>
+
+    <!-- ── Recent scans ─────────────────────────────────── -->
+    <section class="section">
+        <h2>Recent Scans</h2>
+        <table class="books-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Book</th>
+                    <th>Shelf</th>
+                    <th>Scanned By</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in recent_scans %}
+                <tr class="{{ 'row-warning' if scan.is_misplaced else '' }}">
+                    <td>{{ scan.scanned_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ scan.title }}</td>
+                    <td>{{ scan.shelf_name }}</td>
+                    <td>{{ scan.scanned_by or '—' }}</td>
+                    <td>
+                        {% if scan.is_misplaced %}
+                            <span class="badge badge-warning">Misplaced</span>
+                        {% else %}
+                            <span class="badge badge-success">OK</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

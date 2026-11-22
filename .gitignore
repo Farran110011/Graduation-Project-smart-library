@@ -1,0 +1,9 @@
+PRIVATE_DO_NOT_PUBLISH/
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+*.log

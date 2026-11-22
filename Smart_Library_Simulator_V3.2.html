@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Library — Hardware Simulator v3</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f5f0e8;
+  --bg2:#efe9df;
+  --bg3:#e8e0d4;
+  --bg4:#ddd5c8;
+  --card:#fff;
+  --card2:#faf8f4;
+  --bdr:#d4cbbe;
+  --bdr2:#c0b5a4;
+  --bdr3:#a89a88;
+  --tx:#3d3529;
+  --tx2:#7a6e5e;
+  --tx3:#a89a88;
+  --txb:#1a1510;
+  --grn:#16a34a;
+  --grn2:#dcfce7;
+  --blu:#2563eb;
+  --blu2:#dbeafe;
+  --amb:#d97706;
+  --amb2:#fef3c7;
+  --red:#dc2626;
+  --red2:#fee2e2;
+  --oled:#00cc66;
+  --pcb:#1a6830;
+  --pcbt:#0e3a1a;
+  --pcbb:#0c3060;
+  --fm:'DM Mono',monospace;
+  --fs:'Instrument Sans',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--tx);font-family:var(--fs);height:100vh;overflow:hidden}
+
+/* HEADER */
+header{height:50px;padding:0 20px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px;background:var(--card)}
+.h-dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 6px rgba(22,163,74,.4)}
+.h-title{font-size:14px;font-weight:600;color:var(--txb);letter-spacing:-.3px}
+.h-title em{font-style:normal;color:var(--grn);font-weight:700}
+.h-right{margin-left:auto;display:flex;gap:8px}
+.h-badge{font-family:var(--fm);font-size:9px;padding:3px 8px;border-radius:4px;font-weight:400;letter-spacing:.5px}
+.h-b1{background:var(--amb2);color:var(--amb);border:1px solid #fde68a}
+.h-b2{background:var(--blu2);color:var(--blu);border:1px solid #bfdbfe}
+
+/* LAYOUT */
+.app{display:grid;grid-template-columns:230px 1fr 250px;height:calc(100vh - 50px);overflow:hidden}
+
+/* LEFT */
+.left{background:var(--card2);border-right:1px solid var(--bdr);padding:14px;overflow-y:auto;height:100%}
+.sec{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--tx3);margin-bottom:10px}
+.shelf{background:linear-gradient(180deg,#f7f2ea,#efe8dc);border:1px solid var(--bdr);border-radius:8px;padding:8px;margin-bottom:8px;position:relative}
+.shelf::after{content:'';position:absolute;bottom:0;left:8px;right:8px;height:2px;background:linear-gradient(90deg,var(--bdr),var(--bdr2),var(--bdr));border-radius:0 0 4px 4px}
+.sh-hdr{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.sh-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sh-name{font-family:var(--fm);font-size:9px;color:var(--tx2)}
+.sh-cnt{font-family:var(--fm);font-size:8px;color:var(--tx3);margin-left:auto}
+.sh-books{display:flex;gap:3px;flex-wrap:wrap;padding:2px}
+.bk{width:22px;height:50px;border-radius:2px;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s;box-shadow:1px 2px 4px rgba(0,0,0,.12)}
+.bk::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:1.5px;background:rgba(255,255,255,.15);border-radius:1px}
+.bk:hover{transform:translateY(-8px) scale(1.06);box-shadow:0 8px 20px rgba(0,0,0,.15);z-index:3}
+.bk.scanning{transform:translateY(-10px) scale(1.08);box-shadow:0 10px 24px rgba(22,163,74,.2)}
+.bk.mis{box-shadow:0 0 0 2px var(--red),0 2px 8px rgba(220,38,38,.15)}
+.bk-sp{writing-mode:vertical-rl;font-size:5.5px;font-family:var(--fm);color:rgba(255,255,255,.7);overflow:hidden;white-space:nowrap;max-height:42px}
+
+/* Scan shelf button */
+.sh-scan{margin-top:6px;width:100%;padding:5px;border:1px solid var(--bdr);border-radius:5px;background:var(--card);color:var(--tx2);font-family:var(--fm);font-size:9px;cursor:pointer;transition:all .2s;text-align:center}
+.sh-scan:hover{background:var(--grn2);color:var(--grn);border-color:var(--grn)}
+.sh-scan:disabled{opacity:.3;cursor:not-allowed}
+.sh-scan.active{background:var(--grn2);color:var(--grn);border-color:var(--grn)}
+
+.sh-tip{margin-top:14px;padding:10px;background:var(--card);border:1px solid var(--bdr);border-radius:6px;font-size:10px;color:var(--tx2);line-height:1.6}
+
+/* CENTER */
+.center{padding:16px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;height:100%}
+.canvas-wrap{position:relative;width:100%;max-width:760px;z-index:1;flex:1;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden}
+
+.hw{width:100%;height:100%}
+.dev-box{fill:var(--card);stroke:var(--bdr);stroke-width:1;rx:10;transition:stroke .4s,box-shadow .3s}
+.dev-box.on{stroke:var(--grn);stroke-width:1.5}
+.pcb-board{stroke-width:.6}
+.pin{fill:#c4a000}
+.chip{fill:#0e0e14;stroke:#2a2a3a;stroke-width:.4}
+.chip-txt{font-family:var(--fm);fill:#666;text-anchor:middle;dominant-baseline:central}
+.wire{stroke:#c4a000;stroke-width:.4;stroke-dasharray:1.5 1.5;opacity:.35}
+.node-txt{font-family:var(--fs);font-size:11px;fill:var(--txb);font-weight:600;text-anchor:middle}
+.node-sub{font-family:var(--fm);font-size:8px;fill:var(--tx3);text-anchor:middle}
+.oled-txt{font-family:var(--fm);fill:var(--oled)}
+.conn{fill:none;stroke:var(--bdr2);stroke-width:1.2;stroke-dasharray:5 4;transition:stroke .3s,stroke-dasharray .3s}
+.conn.on{stroke:var(--amb);stroke-dasharray:none}
+.conn-lbl{font-family:var(--fm);font-size:8px;fill:var(--tx3);text-anchor:middle}
+.srv-row{fill:var(--bg);stroke:var(--bdr);stroke-width:.5;rx:4}
+.srv-led{transition:fill .3s}
+.srv-txt{font-family:var(--fm);font-size:8px;fill:var(--tx2)}
+.ant-bar{fill:var(--grn);opacity:.12;rx:1;transition:opacity .4s}
+.ant-bar.on{opacity:.8}
+
+/* Animated packet dot */
+.pkt{fill:var(--amb);opacity:0;transition:none}
+.pkt.on{opacity:1}
+
+/* CONTROLS */
+.ctrls{display:flex;gap:6px;width:100%;max-width:760px;z-index:1;margin-top:12px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.btn{padding:7px 14px;border:1px solid var(--bdr);border-radius:6px;background:var(--card);color:var(--tx);font-family:var(--fs);font-size:11px;font-weight:500;cursor:pointer;transition:all .2s}
+.btn:hover{background:var(--bg3);border-color:var(--bdr2)}
+.btn:disabled{opacity:.25;cursor:not-allowed}
+.btn-g{border-color:#86efac;color:var(--grn);background:var(--grn2)}
+.btn-g:hover{background:#bbf7d0}
+.btn-r{border-color:#fca5a5;color:var(--red);background:var(--red2)}
+.btn-a{border-color:#fde68a;color:var(--amb);background:var(--amb2)}
+.spd{margin-left:auto;display:flex;align-items:center;gap:8px}
+.spd-lbl{font-family:var(--fm);font-size:9px;color:var(--tx2)}
+input[type=range]{width:60px;accent-color:var(--blu)}
+
+/* RIGHT */
+.right{background:var(--card2);border-left:1px solid var(--bdr);padding:14px;display:flex;flex-direction:column;overflow:hidden;height:100%}
+.log-wrap{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;margin-top:8px;min-height:0}
+.le{padding:5px 8px;border-radius:4px;font-size:9px;animation:logIn .25s ease;background:var(--card);border:1px solid var(--bdr)}
+@keyframes logIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.le-t{font-family:var(--fm);font-size:8px;color:var(--tx3)}
+.le-m{margin-top:1px;line-height:1.4;font-family:var(--fm);font-size:9px;word-break:break-all}
+.le-m.ok{color:var(--grn)}.le-m.wr{color:var(--amb)}.le-m.er{color:var(--red)}.le-m.in{color:var(--blu)}.le-m.dm{color:var(--tx3)}
+.stats{display:flex;gap:8px;padding:10px 0 0;border-top:1px solid var(--bdr);margin-top:auto}
+.st{flex:1;text-align:center}
+.st-v{font-family:var(--fm);font-size:16px;font-weight:500;color:var(--txb)}
+.st-l{font-size:8px;text-transform:uppercase;letter-spacing:.8px;color:var(--tx3);margin-top:2px}
+
+/* TOOLTIP */
+.tip{position:fixed;background:var(--card);border:1px solid var(--bdr2);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--txb);pointer-events:none;z-index:200;display:none;max-width:210px;box-shadow:0 8px 30px rgba(0,0,0,.1)}
+.tip-m{font-family:var(--fm);font-size:9px;color:var(--tx2);display:block;margin-top:2px}
+.tip-s{font-family:var(--fm);font-size:9px;font-weight:500;display:block;margin-top:3px}
+
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="h-dot"></div>
+  <div class="h-title">Smart Library <em>Hardware Simulator</em></div>
+  <div class="h-right">
+    <div class="h-badge h-b1">SIMULATION</div>
+    <div class="h-badge h-b2">v3.0</div>
+  </div>
+</header>
+
+<div class="app">
+  <!-- LEFT -->
+  <div class="left">
+    <div class="sec">Library shelves</div>
+    <div id="shelves"></div>
+    <div class="sh-tip">
+      Click <strong>Scan shelf</strong> to scan every book on that shelf sequentially, just like a librarian walking down the aisle.<br><br>
+      <span style="color:var(--red)">Red outline</span> = misplaced book.
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center">
+    <div class="canvas-wrap">
+      <svg class="hw" viewBox="0 0 760 450" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="pcbp" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="2.5" cy="2.5" r=".3" fill="rgba(255,255,255,.06)"/></pattern>
+          <pattern id="pcbbp" width="5" height="5" patternUnits="userSpaceOnUse"><circle cx="2.5" cy="2.5" r=".3" fill="rgba(255,255,255,.04)"/></pattern>
+        </defs>
+
+        <!-- ════ SCANNER NODE ════ -->
+        <g id="g-scan" transform="translate(8,46)">
+          <text x="94" y="-14" class="node-txt">Scanner Node</text>
+          <text x="94" y="0" class="node-sub">handheld · battery-powered</text>
+          <rect x="6" y="10" width="176" height="320" class="dev-box" id="scan-bdr"/>
+
+          <!-- ESP32 PCB -->
+          <rect x="16" y="22" width="156" height="54" rx="4" fill="var(--pcbt)"/>
+          <rect x="16" y="22" width="156" height="54" rx="4" fill="url(#pcbp)"/>
+          <rect x="16" y="22" width="156" height="54" rx="4" fill="none" stroke="var(--pcb)" class="pcb-board"/>
+          <!-- PCB traces -->
+          <line x1="48" y1="34" x2="140" y2="34" stroke="#1c6e38" stroke-width=".3" opacity=".5"/>
+          <line x1="48" y1="62" x2="140" y2="62" stroke="#1c6e38" stroke-width=".3" opacity=".5"/>
+          <line x1="64" y1="28" x2="64" y2="70" stroke="#1c6e38" stroke-width=".3" opacity=".4"/>
+          <line x1="124" y1="28" x2="124" y2="70" stroke="#1c6e38" stroke-width=".3" opacity=".4"/>
+          <!-- Main SoC -->
+          <rect x="56" y="38" width="52" height="28" rx="2" class="chip"/>
+          <text x="82" y="50" class="chip-txt" font-size="5">ESP-WROOM-32</text>
+          <text x="82" y="58" class="chip-txt" font-size="3.5" opacity=".5">240MHz · Dual Core</text>
+          <!-- Crystal oscillator -->
+          <rect x="116" y="42" width="12" height="7" rx="1.5" fill="#18182a" stroke="#2a2a40" stroke-width=".3"/>
+          <text x="122" y="47" class="chip-txt" font-size="3">40MHz</text>
+          <!-- Voltage regulator -->
+          <rect x="36" y="44" width="10" height="12" rx="1" fill="#1a1a28" stroke="#2a2a3a" stroke-width=".3"/>
+          <text x="41" y="52" class="chip-txt" font-size="2.5">AMS</text>
+          <!-- Pin headers L -->
+          <g class="pin"><rect x="18" y="26" width="6" height="2.5" rx=".5"/><rect x="18" y="32" width="6" height="2.5" rx=".5"/><rect x="18" y="38" width="6" height="2.5" rx=".5"/><rect x="18" y="44" width="6" height="2.5" rx=".5"/><rect x="18" y="50" width="6" height="2.5" rx=".5"/><rect x="18" y="56" width="6" height="2.5" rx=".5"/><rect x="18" y="62" width="6" height="2.5" rx=".5"/></g>
+          <!-- Pin headers R -->
+          <g class="pin"><rect x="164" y="26" width="6" height="2.5" rx=".5"/><rect x="164" y="32" width="6" height="2.5" rx=".5"/><rect x="164" y="38" width="6" height="2.5" rx=".5"/><rect x="164" y="44" width="6" height="2.5" rx=".5"/><rect x="164" y="50" width="6" height="2.5" rx=".5"/><rect x="164" y="56" width="6" height="2.5" rx=".5"/><rect x="164" y="62" width="6" height="2.5" rx=".5"/></g>
+          <!-- USB-C -->
+          <rect x="70" y="20" width="44" height="8" rx="3.5" fill="#22222e" stroke="#44445a" stroke-width=".4"/>
+          <rect x="80" y="22" width="24" height="4" rx="1.5" fill="#14141e"/>
+          <!-- Onboard LED -->
+          <circle id="scan-led" cx="160" cy="26" r="2.5" fill="var(--tx3)"/>
+          <!-- WiFi antenna trace -->
+          <rect x="146" y="34" width="8" height="8" rx="1" fill="none" stroke="#1c6e38" stroke-width=".4"/>
+          <line x1="140" y1="38" x2="146" y2="38" stroke="#1c6e38" stroke-width=".3"/>
+
+          <!-- SPI bus wires -->
+          <g class="wire"><line x1="56" y1="76" x2="56" y2="92"/><line x1="74" y1="76" x2="74" y2="92"/><line x1="92" y1="76" x2="92" y2="92"/><line x1="110" y1="76" x2="110" y2="92"/></g>
+          <text x="136" y="87" fill="var(--tx3)" font-family="var(--fm)" font-size="6">SPI</text>
+
+          <!-- RC522 RFID Module -->
+          <rect x="16" y="94" width="156" height="66" rx="4" fill="#081a3a"/>
+          <rect x="16" y="94" width="156" height="66" rx="4" fill="url(#pcbbp)"/>
+          <rect x="16" y="94" width="156" height="66" rx="4" fill="none" stroke="var(--pcbb)" class="pcb-board"/>
+          <!-- Coil antenna rings -->
+          <rect x="26" y="102" width="48" height="48" rx="24" fill="none" stroke="rgba(60,120,220,.1)" stroke-width="6"/>
+          <rect x="34" y="110" width="32" height="32" rx="16" fill="none" stroke="rgba(60,120,220,.07)" stroke-width="3.5"/>
+          <circle cx="50" cy="126" r="8" fill="none" stroke="rgba(60,120,220,.14)" stroke-width="1.2"/>
+          <circle cx="50" cy="126" r="3" fill="rgba(60,120,220,.08)"/>
+          <!-- Animated RFID pulse -->
+          <circle id="rfid-ring" cx="50" cy="126" r="18" fill="none" stroke="var(--blu)" stroke-width="1.2" opacity="0"/>
+          <!-- MFRC522 IC -->
+          <rect x="86" y="102" width="44" height="26" rx="2" class="chip"/>
+          <text x="108" y="114" class="chip-txt" font-size="4.5">MFRC522</text>
+          <text x="108" y="122" class="chip-txt" font-size="3.5" opacity=".5">13.56 MHz · HF</text>
+          <!-- Decoupling caps -->
+          <rect x="88" y="134" width="4" height="7" rx=".5" fill="#28283a" stroke="#3a3a50" stroke-width=".3"/>
+          <rect x="96" y="134" width="4" height="7" rx=".5" fill="#28283a" stroke="#3a3a50" stroke-width=".3"/>
+          <rect x="104" y="134" width="4" height="7" rx=".5" fill="#1a1a2a" stroke="#3a3a50" stroke-width=".3"/>
+          <rect x="112" y="134" width="6" height="4" rx=".5" fill="#1a1a2a" stroke="#3a3a50" stroke-width=".3"/>
+          <!-- Pin header -->
+          <g class="pin"><rect x="88" y="146" width="4" height="2.5" rx=".5"/><rect x="96" y="146" width="4" height="2.5" rx=".5"/><rect x="104" y="146" width="4" height="2.5" rx=".5"/><rect x="112" y="146" width="4" height="2.5" rx=".5"/><rect x="120" y="146" width="4" height="2.5" rx=".5"/></g>
+          <text x="94" y="158" fill="var(--tx3)" font-family="var(--fm)" font-size="5.5">RC522 RFID · 13.56 MHz</text>
+
+          <!-- OLED Display -->
+          <rect x="26" y="170" width="136" height="60" rx="4" fill="#060606" stroke="#2a2a2a" stroke-width=".8"/>
+          <rect x="30" y="174" width="128" height="52" rx="2" fill="#0a0a0a"/>
+          <text id="ol1" x="38" y="192" class="oled-txt" font-size="9" opacity=".85">Smart Library v3</text>
+          <text id="ol2" x="38" y="206" class="oled-txt" font-size="8.5" opacity=".65">Ready to scan...</text>
+          <text id="ol3" x="38" y="218" class="oled-txt" font-size="7.5" opacity=".4"></text>
+          <text x="94" y="242" text-anchor="middle" fill="var(--tx3)" font-family="var(--fm)" font-size="5.5">SSD1306 OLED · 128×64 · I²C</text>
+
+          <!-- Buzzer -->
+          <circle cx="42" cy="264" r="13" fill="#1a1a20" stroke="#2e2e38" stroke-width=".8"/>
+          <circle cx="42" cy="264" r="8" fill="#101018" stroke="#222230" stroke-width=".4"/>
+          <circle cx="42" cy="264" r="3.5" fill="#0a0a10"/>
+          <circle id="bz-ring" cx="42" cy="264" r="15" fill="none" stroke="var(--amb)" stroke-width="1.5" opacity="0"/>
+          <text x="42" y="267" text-anchor="middle" fill="#444" font-family="var(--fm)" font-size="5">BZR</text>
+
+          <!-- Battery + TP4056 -->
+          <rect x="70" y="252" width="82" height="22" rx="4" fill="#14141e" stroke="#2a2a38" stroke-width=".6"/>
+          <rect id="bat-f" x="72" y="254" width="64" height="18" rx="3" fill="var(--grn)" opacity=".55"/>
+          <rect x="152" y="258" width="4" height="10" rx="2" fill="#2a2a38"/>
+          <text id="bat-t" x="104" y="267" text-anchor="middle" fill="rgba(255,255,255,.55)" font-family="var(--fm)" font-size="7.5">82%</text>
+          <text x="110" y="288" text-anchor="middle" fill="var(--tx3)" font-family="var(--fm)" font-size="5">Li-Ion 3.7V 2200mAh</text>
+          <!-- TP4056 -->
+          <rect x="70" y="296" width="54" height="16" rx="2" fill="#200808" stroke="#3a1818" stroke-width=".4"/>
+          <text x="97" y="307" text-anchor="middle" fill="#5a2828" font-family="var(--fm)" font-size="4.5">TP4056</text>
+          <circle cx="132" cy="302" r="2" fill="var(--red)" opacity=".25"/>
+          <text x="138" y="305" fill="var(--tx3)" font-family="var(--fm)" font-size="4">CHG</text>
+          <circle cx="148" cy="302" r="2" fill="var(--grn)" opacity=".25"/>
+          <text x="154" y="305" fill="var(--tx3)" font-family="var(--fm)" font-size="4">OK</text>
+        </g>
+
+        <!-- ════ CONNECTIONS ════ -->
+        <path id="p1" d="M192 210 C240 210, 270 140, 310 125" class="conn"/>
+        <text x="242" y="152" class="conn-lbl">mesh</text>
+        <text x="242" y="163" class="conn-lbl" font-size="6" opacity=".5">painlessMesh</text>
+        <circle id="pk1" cx="0" cy="0" r="4.5" class="pkt"/>
+
+        <path id="p2" d="M446 125 C476 125, 496 115, 526 105" class="conn"/>
+        <text x="480" y="100" class="conn-lbl">mesh</text>
+        <circle id="pk2" cx="0" cy="0" r="4.5" class="pkt"/>
+
+        <path id="p3" d="M608 200 C608 245, 614 280, 618 308" class="conn" stroke-dasharray="3 3"/>
+        <text x="630" y="250" class="conn-lbl">USB serial</text>
+        <text x="630" y="262" class="conn-lbl" font-size="6" opacity=".5">115200 baud</text>
+        <circle id="pk3" cx="0" cy="0" r="4.5" class="pkt"/>
+
+        <!-- ════ REPEATER ════ -->
+        <g id="g-rep" transform="translate(308,38)">
+          <text x="70" y="-12" class="node-txt">Repeater</text>
+          <text x="70" y="2" class="node-sub">wall-mounted · relay node</text>
+          <rect x="6" y="10" width="128" height="148" class="dev-box" id="rep-bdr"/>
+
+          <rect x="16" y="26" width="108" height="44" rx="4" fill="var(--pcbt)"/>
+          <rect x="16" y="26" width="108" height="44" rx="4" fill="url(#pcbp)"/>
+          <rect x="16" y="26" width="108" height="44" rx="4" fill="none" stroke="var(--pcb)" class="pcb-board"/>
+          <rect x="44" y="34" width="36" height="22" rx="2" class="chip"/>
+          <text x="62" y="47" class="chip-txt" font-size="4.5">ESP32</text>
+          <g class="pin"><rect x="18" y="30" width="5" height="2" rx=".5"/><rect x="18" y="36" width="5" height="2" rx=".5"/><rect x="18" y="42" width="5" height="2" rx=".5"/><rect x="18" y="48" width="5" height="2" rx=".5"/><rect x="18" y="54" width="5" height="2" rx=".5"/></g>
+          <g class="pin"><rect x="117" y="30" width="5" height="2" rx=".5"/><rect x="117" y="36" width="5" height="2" rx=".5"/><rect x="117" y="42" width="5" height="2" rx=".5"/><rect x="117" y="48" width="5" height="2" rx=".5"/><rect x="117" y="54" width="5" height="2" rx=".5"/></g>
+          <rect x="50" y="24" width="28" height="6" rx="2" fill="#22222e" stroke="#44445a" stroke-width=".3"/>
+
+          <!-- Antenna -->
+          <line x1="70" y1="80" x2="70" y2="100" stroke="#888" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="70" cy="78" r="4.5" fill="none" stroke="#888" stroke-width="1.2"/>
+          <circle cx="70" cy="78" r="8" fill="none" stroke="#777" stroke-width=".4" opacity=".3"/>
+          <g id="rep-bars" transform="translate(32,112)">
+            <rect x="0" y="16" width="4" height="6" class="ant-bar"/>
+            <rect x="8" y="12" width="4" height="10" class="ant-bar"/>
+            <rect x="16" y="8" width="4" height="14" class="ant-bar"/>
+            <rect x="24" y="4" width="4" height="18" class="ant-bar"/>
+          </g>
+          <text x="78" y="134" fill="var(--tx3)" font-family="var(--fm)" font-size="7">mesh ok</text>
+          <circle id="rep-led" cx="130" cy="18" r="2.5" fill="var(--tx3)"/>
+          <circle cx="14" cy="154" r="2.5" fill="none" stroke="var(--bdr)" stroke-width=".4"/>
+          <circle cx="126" cy="154" r="2.5" fill="none" stroke="var(--bdr)" stroke-width=".4"/>
+        </g>
+
+        <!-- ════ ROOT NODE ════ -->
+        <g id="g-root" transform="translate(524,28)">
+          <text x="70" y="-8" class="node-txt">Root Node</text>
+          <text x="70" y="6" class="node-sub">gateway · USB-attached</text>
+          <rect x="6" y="14" width="128" height="158" class="dev-box" id="root-bdr"/>
+
+          <rect x="16" y="28" width="108" height="44" rx="4" fill="var(--pcbt)"/>
+          <rect x="16" y="28" width="108" height="44" rx="4" fill="url(#pcbp)"/>
+          <rect x="16" y="28" width="108" height="44" rx="4" fill="none" stroke="var(--pcb)" class="pcb-board"/>
+          <rect x="44" y="36" width="36" height="22" rx="2" class="chip"/>
+          <text x="62" y="49" class="chip-txt" font-size="4.5">ESP32</text>
+          <g class="pin"><rect x="18" y="32" width="5" height="2" rx=".5"/><rect x="18" y="38" width="5" height="2" rx=".5"/><rect x="18" y="44" width="5" height="2" rx=".5"/><rect x="18" y="50" width="5" height="2" rx=".5"/><rect x="18" y="56" width="5" height="2" rx=".5"/></g>
+          <g class="pin"><rect x="117" y="32" width="5" height="2" rx=".5"/><rect x="117" y="38" width="5" height="2" rx=".5"/><rect x="117" y="44" width="5" height="2" rx=".5"/><rect x="117" y="50" width="5" height="2" rx=".5"/><rect x="117" y="56" width="5" height="2" rx=".5"/></g>
+
+          <line x1="70" y1="82" x2="70" y2="102" stroke="#888" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="70" cy="80" r="4.5" fill="none" stroke="#888" stroke-width="1.2"/>
+          <g id="root-bars" transform="translate(32,112)">
+            <rect x="0" y="16" width="4" height="6" class="ant-bar"/>
+            <rect x="8" y="12" width="4" height="10" class="ant-bar"/>
+            <rect x="16" y="8" width="4" height="14" class="ant-bar"/>
+            <rect x="24" y="4" width="4" height="18" class="ant-bar"/>
+          </g>
+          <text x="78" y="134" fill="var(--tx3)" font-family="var(--fm)" font-size="7">mesh ok</text>
+
+          <!-- USB-B port -->
+          <rect x="34" y="146" width="72" height="18" rx="4" fill="#18182a" stroke="#34344a" stroke-width=".6" id="usb-r"/>
+          <rect x="46" y="150" width="48" height="10" rx="2.5" fill="#10101e" stroke="#28283e" stroke-width=".3"/>
+          <text x="70" y="158" text-anchor="middle" fill="#444" font-family="var(--fm)" font-size="6">USB-B</text>
+          <circle id="root-led" cx="130" cy="22" r="2.5" fill="var(--tx3)"/>
+        </g>
+
+        <!-- ════ SERVER ════ -->
+        <g id="g-srv" transform="translate(506,312)">
+          <text x="112" y="-8" text-anchor="middle" class="node-txt">Server</text>
+          <text x="112" y="6" text-anchor="middle" class="node-sub">localhost · dedicated machine</text>
+          <rect x="6" y="14" width="218" height="115" class="dev-box" id="srv-bdr"/>
+
+          <rect x="16" y="28" width="196" height="26" rx="4" class="srv-row"/>
+          <circle id="sl1" cx="30" cy="41" r="3" fill="var(--grn)" class="srv-led"/>
+          <text x="42" y="44" class="srv-txt">Flask web server</text>
+          <text x="176" y="44" class="srv-txt" opacity=".4">:5000</text>
+
+          <rect x="16" y="60" width="196" height="26" rx="4" class="srv-row"/>
+          <circle id="sl2" cx="30" cy="73" r="3" fill="var(--grn)" class="srv-led"/>
+          <text x="42" y="76" class="srv-txt">MySQL database</text>
+          <text x="176" y="76" class="srv-txt" opacity=".4">:3306</text>
+
+          <rect x="16" y="92" width="196" height="26" rx="4" class="srv-row"/>
+          <circle id="sl3" cx="30" cy="105" r="3" fill="var(--amb)" class="srv-led"/>
+          <text x="42" y="108" class="srv-txt">PySerial bridge</text>
+          <text id="sl3-st" x="176" y="108" class="srv-txt" opacity=".4">idle</text>
+
+          <circle id="srv-led" cx="220" cy="22" r="2.5" fill="var(--tx3)"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="ctrls">
+      <button class="btn btn-a" onclick="misplace()">Misplace a book</button>
+      <button class="btn btn-r" onclick="reset()">Reset</button>
+      <div class="spd">
+        <span class="spd-lbl" id="spd-v">1×</span>
+        <input type="range" id="spd" min="1" max="6" value="3" step="1" oninput="setSpd()">
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <div class="sec">Event log</div>
+    <div class="log-wrap" id="log"></div>
+    <div class="stats">
+      <div class="st"><div class="st-v" id="s-s">0</div><div class="st-l">Scans</div></div>
+      <div class="st"><div class="st-v" id="s-m">0</div><div class="st-l">Misplaced</div></div>
+      <div class="st"><div class="st-v" id="s-o">0</div><div class="st-l">Correct</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip"><div id="t-t"></div><span class="tip-m" id="t-r"></span><span class="tip-m" id="t-sh"></span><span class="tip-s" id="t-st"></span></div>
+
+<script>
+const SH=[
+  {id:1,n:"Shelf A",c:"Science",dot:"#2563eb"},
+  {id:2,n:"Shelf B",c:"Literature",dot:"#7c3aed"},
+  {id:3,n:"Shelf C",c:"Engineering",dot:"#059669"},
+  {id:4,n:"Shelf D",c:"History",dot:"#d97706"},
+];
+const BK=[
+  {id:1,rf:"E2:45:A1:3F",t:"Physics 101",a:"Al-Khalili",es:1,cs:1,c:"#2563eb"},
+  {id:2,rf:"F3:82:B7:1D",t:"Quantum Mech.",a:"Griffiths",es:1,cs:1,c:"#1d4ed8"},
+  {id:3,rf:"A1:19:C4:8E",t:"Calculus II",a:"Stewart",es:1,cs:1,c:"#3b82f6"},
+  {id:4,rf:"B7:56:D2:9A",t:"Chemistry",a:"Zumdahl",es:1,cs:1,c:"#1e40af"},
+  {id:5,rf:"C8:23:E5:4B",t:"Thermo.",a:"Cengel",es:1,cs:1,c:"#2563eb"},
+  {id:6,rf:"D4:67:F8:2C",t:"Shakespeare",a:"Various",es:2,cs:2,c:"#7c3aed"},
+  {id:7,rf:"E9:34:A2:7D",t:"Hamlet",a:"Shakespeare",es:2,cs:2,c:"#8b5cf6"},
+  {id:8,rf:"F1:78:B3:9E",t:"Arabic Lit.",a:"Mahfouz",es:2,cs:2,c:"#6d28d9"},
+  {id:9,rf:"A5:12:C6:3F",t:"Poetry",a:"Darwish",es:2,cs:2,c:"#7c3aed"},
+  {id:10,rf:"B2:89:D4:1A",t:"Data Struct.",a:"Cormen",es:3,cs:3,c:"#059669"},
+  {id:11,rf:"C6:45:E7:8B",t:"Algorithms",a:"Sedgewick",es:3,cs:3,c:"#047857"},
+  {id:12,rf:"D3:90:F1:5C",t:"Dig. Logic",a:"Mano",es:3,cs:3,c:"#065f46"},
+  {id:13,rf:"E7:56:A8:2D",t:"Micropro.",a:"Stallings",es:3,cs:3,c:"#059669"},
+  {id:14,rf:"F8:23:B9:4E",t:"Signals",a:"Oppenheim",es:3,cs:3,c:"#047857"},
+  {id:15,rf:"A3:67:C1:7F",t:"World Hist.",a:"Stearns",es:4,cs:4,c:"#d97706"},
+  {id:16,rf:"B9:12:D5:8A",t:"Islam G.A.",a:"Al-Hassan",es:4,cs:4,c:"#b45309"},
+  {id:17,rf:"C4:78:E2:3B",t:"Arab Hist.",a:"Hourani",es:4,cs:4,c:"#d97706"},
+  {id:18,rf:"D1:34:F6:9C",t:"Ottoman",a:"Finkel",es:4,cs:4,c:"#92400e"},
+];
+
+let st={s:0,m:0,o:0},busy=false,batt=82,scanningShelf=false;
+
+// Speed: slider 1-6 maps to [0.5, 0.75, 1, 1.5, 2, 3]
+const SPEEDS=[0.5,0.75,1,1.5,2,3];
+let spd=SPEEDS[2]; // default 1x
+
+function setSpd(){
+  const v=parseInt(document.getElementById('spd').value)-1;
+  spd=SPEEDS[v];
+  document.getElementById('spd-v').textContent=spd+'×';
+}
+
+// ── RENDER ──
+function renderShelves(){
+  const c=document.getElementById('shelves');c.innerHTML='';
+  SH.forEach(s=>{
+    const bks=BK.filter(b=>b.cs===s.id),exp=BK.filter(b=>b.es===s.id);
+    const d=document.createElement('div');d.className='shelf';
+    d.innerHTML=`<div class="sh-hdr"><div class="sh-dot" style="background:${s.dot}"></div><div class="sh-name">${s.n} — ${s.c}</div><div class="sh-cnt">${bks.length}/${exp.length}</div></div><div class="sh-books">${bks.map(b=>`<div class="bk ${b.cs!==b.es?'mis':''}" style="background:${b.c}" data-id="${b.id}" onmouseenter="showTip(event,${b.id})" onmouseleave="hideTip()"><span class="bk-sp">${b.t}</span></div>`).join('')}</div><button class="sh-scan" data-shelf="${s.id}" onclick="scanShelf(${s.id})">Scan shelf</button>`;
+    c.appendChild(d);
+  });
+}
+
+// ── TOOLTIP ──
+function showTip(e,id){
+  const b=BK.find(x=>x.id===id),es=SH.find(x=>x.id===b.es),cs=SH.find(x=>x.id===b.cs),m=b.cs!==b.es;
+  const t=document.getElementById('tip');
+  document.getElementById('t-t').textContent=`${b.t} — ${b.a}`;
+  document.getElementById('t-r').textContent=`RFID: ${b.rf}`;
+  document.getElementById('t-sh').textContent=`Expected: ${es.n} | Current: ${cs.n}`;
+  const s=document.getElementById('t-st');s.textContent=m?'MISPLACED':'CORRECT';s.style.color=m?'var(--red)':'var(--grn)';
+  t.style.display='block';t.style.left=(e.clientX+14)+'px';t.style.top=(e.clientY-10)+'px';
+}
+function hideTip(){document.getElementById('tip').style.display='none';}
+
+// ── HELPERS ──
+const W=ms=>new Promise(r=>setTimeout(r,ms/spd));
+
+function animPkt(pktId,pathId,dur=800){
+  return new Promise(res=>{
+    const pk=document.getElementById(pktId),pa=document.getElementById(pathId),len=pa.getTotalLength();
+    pk.classList.add('on');
+    let start=null;const d=dur/spd;
+    function step(ts){
+      if(!start)start=ts;
+      const p=Math.min((ts-start)/d,1),ease=p<.5?2*p*p:-1+(4-2*p)*p;
+      const pt=pa.getPointAtLength(ease*len);
+      pk.setAttribute('cx',pt.x);pk.setAttribute('cy',pt.y);
+      if(p<1)requestAnimationFrame(step);else{pk.classList.remove('on');res();}
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+function setConn(id,on){document.getElementById(id).classList.toggle('on',on);}
+function setBdr(id,on){document.getElementById(id).classList.toggle('on',on);}
+function setLed(id,c){document.getElementById(id).setAttribute('fill',c);}
+function pulseBars(prefix){
+  document.querySelectorAll(`#${prefix}-bars .ant-bar`).forEach((b,i)=>{
+    setTimeout(()=>{b.classList.add('on');setTimeout(()=>b.classList.remove('on'),700/spd);},i*80/spd);
+  });
+}
+function oled(a,b,c=''){document.getElementById('ol1').textContent=a;document.getElementById('ol2').textContent=b;document.getElementById('ol3').textContent=c;}
+function rfidPulse(){
+  const el=document.getElementById('rfid-ring');
+  el.setAttribute('opacity','.45');el.setAttribute('r','18');
+  el.style.transition=`r ${400/spd}ms ease-out, opacity ${400/spd}ms ease-out`;
+  el.setAttribute('r','32');el.setAttribute('opacity','0');
+  setTimeout(()=>{el.style.transition='none';el.setAttribute('r','18');},400/spd);
+}
+function buzzerBeep(){
+  const el=document.getElementById('bz-ring');
+  el.setAttribute('opacity','.6');
+  setTimeout(()=>el.setAttribute('opacity','0'),280/spd);
+}
+
+// ── SCAN ONE BOOK ──
+async function scanOne(id){
+  const b=BK.find(x=>x.id===id),cs=SH.find(x=>x.id===b.cs),es=SH.find(x=>x.id===b.es),m=b.cs!==b.es;
+  const el=document.querySelector(`[data-id="${id}"]`);if(el)el.classList.add('scanning');
+  batt=Math.max(5,batt-.25);document.getElementById('bat-f').setAttribute('width',Math.round(batt*64/100));document.getElementById('bat-t').textContent=Math.round(batt)+'%';
+
+  // 1 — RFID
+  setBdr('scan-bdr',true);setLed('scan-led','var(--grn)');
+  rfidPulse();
+  oled('Detecting...',b.rf);
+  log(`RFID: ${b.rf}`,'in');
+  await W(550);
+
+  // 2 — Read + buzzer
+  buzzerBeep();
+  oled(b.t,`${cs.n} | ${b.rf.slice(0,8)}`,m?'! WRONG SHELF':'OK');
+  log(`Read: "${b.t}" on ${cs.n}`,'in');
+  await W(550);
+
+  // 3 — mesh → Repeater
+  log('→ mesh → Repeater','dm');
+  setConn('p1',true);
+  await animPkt('pk1','p1');
+  setConn('p1',false);
+  setBdr('rep-bdr',true);setLed('rep-led','var(--grn)');pulseBars('rep');
+  log('Repeater received','in');
+  await W(400);
+
+  // 4 — mesh → Root
+  log('→ Repeater relay → Root','dm');
+  setConn('p2',true);
+  await animPkt('pk2','p2');
+  setConn('p2',false);
+  setBdr('rep-bdr',false);setLed('rep-led','var(--tx3)');
+  setBdr('root-bdr',true);setLed('root-led','var(--grn)');pulseBars('root');
+  log('Root received','in');
+  await W(400);
+
+  // 5 — USB → Server
+  log('→ USB serial → Server','dm');
+  document.getElementById('usb-r').setAttribute('stroke','var(--amb)');
+  setConn('p3',true);setLed('sl3','var(--grn)');document.getElementById('sl3-st').textContent='active';
+  await animPkt('pk3','p3',600);
+  setConn('p3',false);
+  document.getElementById('usb-r').setAttribute('stroke','#34344a');
+  setBdr('root-bdr',false);setLed('root-led','var(--tx3)');
+  setBdr('srv-bdr',true);setLed('srv-led','var(--grn)');
+  await W(300);
+
+  // 6 — Result
+  st.s++;
+  if(m){st.m++;log(`MISPLACED: "${b.t}" on ${cs.n}, expected ${es.n}`,'er');}
+  else{st.o++;log(`OK: "${b.t}" correctly on ${cs.n}`,'ok');}
+  updStats();
+  await W(300);
+
+  // cleanup
+  setBdr('scan-bdr',false);setLed('scan-led','var(--tx3)');
+  setBdr('srv-bdr',false);setLed('srv-led','var(--tx3)');
+  setLed('sl3','var(--amb)');document.getElementById('sl3-st').textContent='idle';
+  oled('Ready...','Waiting for tag');
+  if(el)el.classList.remove('scanning');
+}
+
+// ── SCAN ENTIRE SHELF ──
+async function scanShelf(shelfId){
+  if(busy)return;
+  busy=true;scanningShelf=true;
+
+  // Highlight the active shelf button
+  document.querySelectorAll('.sh-scan').forEach(b=>b.disabled=true);
+  const activeBtn=document.querySelector(`.sh-scan[data-shelf="${shelfId}"]`);
+  if(activeBtn)activeBtn.classList.add('active');
+
+  const shelf=SH.find(s=>s.id===shelfId);
+  const booksOnShelf=BK.filter(b=>b.cs===shelfId);
+
+  log(`Scanning ${shelf.n} — ${booksOnShelf.length} books...`,'wr');
+  oled(`Scanning ${shelf.n}...`,`${booksOnShelf.length} books`);
+  await W(600);
+
+  for(let i=0;i<booksOnShelf.length;i++){
+    oled(`${shelf.n} [${i+1}/${booksOnShelf.length}]`,booksOnShelf[i].t);
+    await scanOne(booksOnShelf[i].id);
+    if(i<booksOnShelf.length-1) await W(300);
+  }
+
+  log(`${shelf.n} scan complete — ${booksOnShelf.length} books processed`,'ok');
+  oled('Scan complete',`${shelf.n} done`);
+
+  document.querySelectorAll('.sh-scan').forEach(b=>b.disabled=false);
+  if(activeBtn)activeBtn.classList.remove('active');
+  busy=false;scanningShelf=false;
+}
+
+// ── LOG ──
+function log(msg,type='in'){
+  const c=document.getElementById('log'),now=new Date();
+  const ts=now.toLocaleTimeString('en-GB',{hour12:false})+'.'+String(now.getMilliseconds()).padStart(3,'0');
+  const e=document.createElement('div');e.className='le';
+  e.innerHTML=`<div class="le-t">${ts}</div><div class="le-m ${type}">${msg}</div>`;
+  c.insertBefore(e,c.firstChild);
+  while(c.children.length>100)c.removeChild(c.lastChild);
+}
+function updStats(){document.getElementById('s-s').textContent=st.s;document.getElementById('s-m').textContent=st.m;document.getElementById('s-o').textContent=st.o;}
+
+// ── CONTROLS ──
+function misplace(){
+  if(busy)return;
+  const ok=BK.filter(b=>b.cs===b.es);if(!ok.length){log('All books already misplaced!','wr');return;}
+  const b=ok[Math.floor(Math.random()*ok.length)],other=SH.filter(s=>s.id!==b.es),ws=other[Math.floor(Math.random()*other.length)];
+  b.cs=ws.id;
+  const es=SH.find(s=>s.id===b.es);
+  log(`Moved "${b.t}" from ${es.n} → ${ws.n}`,'wr');
+  renderShelves();
+}
+function reset(){
+  if(busy)return;
+  BK.forEach(b=>b.cs=b.es);st={s:0,m:0,o:0};batt=82;
+  document.getElementById('bat-f').setAttribute('width','64');document.getElementById('bat-t').textContent='82%';
+  updStats();document.getElementById('log').innerHTML='';
+  oled('Smart Library v3','Ready to scan...');
+  log('System reset — all books restored','ok');
+  renderShelves();
+}
+
+// ── INIT ──
+renderShelves();
+setSpd();
+log('System online — 4 shelves · 18 books','ok');
+log('Scanner joined mesh · Repeater online','ok');
+log('Root Node → USB COM3 · 115200 baud','ok');
+log('Flask :5000 · MySQL :3306 · ready','ok');
+log('Awaiting scan events...','in');
+</script>
+</body>
+</html>

@@ -1,0 +1,607 @@
+{% extends 'base.html' %}
+
+{% block title %}Library Map — Smart Library{% endblock %}
+
+{% block head %}
+<style>
+.map-page { position: relative; }
+
+/* ── Stats bar ── */
+.map-info {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.map-stat { text-align: center; }
+.map-stat-value { font-size: 22px; font-weight: 700; }
+.map-stat-label {
+    font-size: 11px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Floor plan container ── */
+.floor-plan {
+    position: relative;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+.plan-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ── Shelf hotspot ── */
+.shelf-spot {
+    position: absolute;
+    width: 17%;
+    min-width: 90px;
+    padding: 8px 10px;
+    background: rgba(255,255,255,0.92);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+    z-index: 3;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.shelf-spot:hover {
+    transform: scale(1.06);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    background: rgba(255,255,255,0.97);
+}
+.shelf-spot.active {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgba(22,163,74,0.2), 0 6px 20px rgba(0,0,0,0.12);
+    background: rgba(255,255,255,0.97);
+}
+.shelf-spot.has-misplaced { border-color: var(--red); }
+
+.shelf-spot.has-misplaced::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border: 2px solid var(--red);
+    border-radius: 10px;
+    animation: spotPulse 2s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes spotPulse {
+    0%, 100% { opacity: 0.2; }
+    50% { opacity: 0.7; }
+}
+
+.spot-code { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; line-height: 1; }
+.spot-cat { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+.spot-count { font-size: 10px; color: var(--text2); margin-top: 4px; font-weight: 500; }
+.spot-alert { font-size: 9px; font-weight: 700; color: var(--red); margin-top: 2px; display: none; }
+.has-misplaced .spot-alert { display: block; }
+
+.spot-science .spot-code, .spot-science .spot-cat { color: #2563eb; }
+.spot-literature .spot-code, .spot-literature .spot-cat { color: #7c3aed; }
+.spot-engineering .spot-code, .spot-engineering .spot-cat { color: #059669; }
+.spot-history .spot-code, .spot-history .spot-cat { color: #d97706; }
+
+/* ── Legend ── */
+.map-legend {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+/* ── Side panel ── */
+.side-panel {
+    position: fixed;
+    top: 0; right: -420px;
+    width: 400px; height: 100vh;
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 20px rgba(0,0,0,0.08);
+    z-index: 100;
+    transition: right 0.3s ease;
+    display: flex; flex-direction: column;
+}
+.side-panel.open { right: 0; }
+
+.panel-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+}
+.panel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.panel-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.panel-subtitle { font-size: 12px; color: var(--text2); }
+.panel-close {
+    margin-left: auto; background: none;
+    border: 1px solid var(--border); border-radius: 6px;
+    width: 32px; height: 32px; font-size: 16px;
+    cursor: pointer; color: var(--text2);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+}
+.panel-close:hover { background: var(--bg); }
+.panel-body { flex: 1; overflow-y: auto; padding: 16px 24px; }
+
+.book-item {
+    padding: 12px; border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 8px;
+    transition: background 0.2s;
+}
+.book-item:hover { background: #faf8f4; }
+.book-item.misplaced { border-color: var(--red); background: var(--red-bg); }
+.book-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.book-author { font-size: 12px; color: var(--text2); }
+.book-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.book-rfid { font-family: 'Consolas', monospace; font-size: 10px; color: var(--text2); background: var(--bg); padding: 2px 6px; border-radius: 3px; }
+.book-status { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 3px; }
+.book-status.ok { color: var(--green); background: var(--green-bg); }
+.book-status.wrong { color: var(--red); background: var(--red-bg); }
+.book-expected { font-size: 10px; color: var(--red); margin-top: 4px; font-weight: 500; }
+.panel-empty { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 13px; }
+
+.overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.15); z-index: 99;
+    opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+.overlay.visible { opacity: 1; pointer-events: auto; }
+
+/* ── Navigation path animation ── */
+.nav-path {
+    stroke: var(--green);
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    stroke-dasharray: var(--path-len);
+    stroke-dashoffset: var(--path-len);
+    animation: drawPath 1.5s ease-out 0.3s forwards;
+}
+@keyframes drawPath {
+    to { stroke-dashoffset: 0; }
+}
+.nav-marker-ring {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    opacity: 0;
+    animation: markerAppear 0.4s ease-out 1.8s forwards, markerPulse 1.2s ease-in-out 2.2s infinite;
+}
+.nav-marker-dot {
+    fill: var(--green);
+    opacity: 0;
+    animation: markerAppear 0.4s ease-out 1.8s forwards;
+}
+@keyframes markerAppear {
+    to { opacity: 1; }
+}
+@keyframes markerPulse {
+    0%, 100% { r: 14; opacity: 0.15; }
+    50% { r: 20; opacity: 0.05; }
+}
+.nav-start {
+    fill: var(--green);
+    opacity: 0;
+    animation: markerAppear 0.3s ease-out forwards;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="map-page">
+    <h1>Library Map</h1>
+
+    <div class="map-info" id="map-info"></div>
+
+    <div class="floor-plan" id="floor-plan">
+        <svg class="plan-svg" viewBox="0 0 960 640" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <pattern id="stairHatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="8" stroke="#c4b9a8" stroke-width="1.5"/>
+                </pattern>
+            </defs>
+
+            <!-- ═══════ FLOOR ═══════ -->
+            <rect x="30" y="20" width="900" height="600" fill="#faf8f4" rx="2"/>
+            <rect x="30" y="20" width="900" height="600" fill="none" stroke="#3d3529" stroke-width="4" rx="2"/>
+
+            <!-- ═══════ ENTRANCE ═══════ -->
+            <line x1="410" y1="20" x2="550" y2="20" stroke="#faf8f4" stroke-width="6"/>
+            <line x1="415" y1="22" x2="432" y2="44" stroke="#3d3529" stroke-width="1.5"/>
+            <line x1="545" y1="22" x2="528" y2="44" stroke="#3d3529" stroke-width="1.5"/>
+            <text x="480" y="13" text-anchor="middle" font-size="11" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif" font-weight="600" letter-spacing="2">ENTRANCE</text>
+
+            <!-- ═══════ LEFT COLUMN WALL ═══════ -->
+            <line x1="180" y1="20" x2="180" y2="620" stroke="#3d3529" stroke-width="3"/>
+            <!-- Door: reception to main hall -->
+            <line x1="180" y1="55" x2="180" y2="90" stroke="#faf8f4" stroke-width="5"/>
+
+            <!-- ── Reception Counter ── -->
+            <rect x="45" y="38" width="125" height="55" fill="#e8e4db" stroke="#3d3529" stroke-width="1.5" rx="4"/>
+            <text x="107" y="70" text-anchor="middle" font-size="11" fill="#3d3529" font-family="Segoe UI, system-ui, sans-serif" font-weight="600">Reception</text>
+
+            <!-- ── Room divider: office ── -->
+            <line x1="30" y1="130" x2="180" y2="130" stroke="#3d3529" stroke-width="2"/>
+            <line x1="180" y1="175" x2="180" y2="215" stroke="#faf8f4" stroke-width="5"/>
+            <rect x="45" y="145" width="120" height="120" fill="#f0ece4" stroke="none" rx="2"/>
+            <text x="105" y="175" text-anchor="middle" font-size="10" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif" font-weight="600">Librarian</text>
+            <text x="105" y="190" text-anchor="middle" font-size="10" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif">Office</text>
+            <rect x="60" y="210" width="55" height="25" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="88" cy="245" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- ── Room divider: study ── -->
+            <line x1="30" y1="280" x2="180" y2="280" stroke="#3d3529" stroke-width="2"/>
+            <line x1="180" y1="320" x2="180" y2="360" stroke="#faf8f4" stroke-width="5"/>
+            <rect x="45" y="295" width="120" height="115" fill="#f0ece4" stroke="none" rx="2"/>
+            <text x="105" y="320" text-anchor="middle" font-size="10" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif" font-weight="600">Study Room</text>
+            <rect x="65" y="345" width="50" height="25" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="78" cy="337" r="4" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="102" cy="337" r="4" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="78" cy="378" r="4" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="102" cy="378" r="4" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- ── Room divider: WC ── -->
+            <line x1="30" y1="425" x2="180" y2="425" stroke="#3d3529" stroke-width="2"/>
+            <line x1="105" y1="425" x2="105" y2="520" stroke="#3d3529" stroke-width="1.5"/>
+            <rect x="40" y="435" width="55" height="75" fill="#f0ece4" stroke="none" rx="2"/>
+            <text x="67" y="478" text-anchor="middle" font-size="11" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif" font-weight="600">WC</text>
+            <rect x="115" y="435" width="55" height="75" fill="#f0ece4" stroke="none" rx="2"/>
+            <text x="142" y="478" text-anchor="middle" font-size="11" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif" font-weight="600">WC</text>
+
+            <!-- ── Storage ── -->
+            <line x1="30" y1="520" x2="180" y2="520" stroke="#3d3529" stroke-width="2"/>
+            <text x="105" y="575" text-anchor="middle" font-size="10" fill="#c4b9a8" font-family="Segoe UI, system-ui, sans-serif">Storage</text>
+
+            <!-- ═══════ MAIN HALL ═══════ -->
+            <text x="555" y="50" text-anchor="middle" font-size="13" fill="#7a6e5e" font-family="Segoe UI, system-ui, sans-serif" font-weight="600" letter-spacing="1.5">MAIN HALL</text>
+
+            <!-- Shelf zone A — Science (top-left) -->
+            <rect x="220" y="75" width="185" height="160" fill="rgba(37,99,235,0.04)" stroke="rgba(37,99,235,0.15)" stroke-width="1" stroke-dasharray="6 3" rx="6"/>
+            <line x1="240" y1="100" x2="385" y2="100" stroke="rgba(37,99,235,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="118" x2="385" y2="118" stroke="rgba(37,99,235,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="136" x2="385" y2="136" stroke="rgba(37,99,235,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="154" x2="385" y2="154" stroke="rgba(37,99,235,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="172" x2="385" y2="172" stroke="rgba(37,99,235,0.18)" stroke-width="2.5"/>
+
+            <!-- Shelf zone B — Literature (top-right) -->
+            <rect x="520" y="75" width="185" height="160" fill="rgba(124,58,237,0.04)" stroke="rgba(124,58,237,0.15)" stroke-width="1" stroke-dasharray="6 3" rx="6"/>
+            <line x1="540" y1="100" x2="685" y2="100" stroke="rgba(124,58,237,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="118" x2="685" y2="118" stroke="rgba(124,58,237,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="136" x2="685" y2="136" stroke="rgba(124,58,237,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="154" x2="685" y2="154" stroke="rgba(124,58,237,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="172" x2="685" y2="172" stroke="rgba(124,58,237,0.18)" stroke-width="2.5"/>
+
+            <!-- ── Reading Area (center) ── -->
+            <text x="555" y="272" text-anchor="middle" font-size="10" fill="#c4b9a8" font-family="Segoe UI, system-ui, sans-serif" letter-spacing="2">READING AREA</text>
+
+            <!-- Table 1 -->
+            <rect x="260" y="288" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="278" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="308" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="278" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="308" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- Table 2 -->
+            <rect x="385" y="288" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="403" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="433" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="403" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="433" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- Table 3 -->
+            <rect x="510" y="288" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="528" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="558" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="528" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="558" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- Table 4 -->
+            <rect x="635" y="288" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="653" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="683" cy="280" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="653" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="683" cy="331" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- Table 5 (right side, between B and D) -->
+            <rect x="780" y="210" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="798" cy="202" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="828" cy="202" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="798" cy="253" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="828" cy="253" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- Shelf zone C — Engineering (bottom-left) -->
+            <rect x="220" y="370" width="185" height="160" fill="rgba(5,150,105,0.04)" stroke="rgba(5,150,105,0.15)" stroke-width="1" stroke-dasharray="6 3" rx="6"/>
+            <line x1="240" y1="395" x2="385" y2="395" stroke="rgba(5,150,105,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="413" x2="385" y2="413" stroke="rgba(5,150,105,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="431" x2="385" y2="431" stroke="rgba(5,150,105,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="449" x2="385" y2="449" stroke="rgba(5,150,105,0.18)" stroke-width="2.5"/>
+            <line x1="240" y1="467" x2="385" y2="467" stroke="rgba(5,150,105,0.18)" stroke-width="2.5"/>
+
+            <!-- Shelf zone D — History (bottom-right) -->
+            <rect x="520" y="370" width="185" height="160" fill="rgba(217,119,6,0.04)" stroke="rgba(217,119,6,0.15)" stroke-width="1" stroke-dasharray="6 3" rx="6"/>
+            <line x1="540" y1="395" x2="685" y2="395" stroke="rgba(217,119,6,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="413" x2="685" y2="413" stroke="rgba(217,119,6,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="431" x2="685" y2="431" stroke="rgba(217,119,6,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="449" x2="685" y2="449" stroke="rgba(217,119,6,0.18)" stroke-width="2.5"/>
+            <line x1="540" y1="467" x2="685" y2="467" stroke="rgba(217,119,6,0.18)" stroke-width="2.5"/>
+
+            <!-- ── Bottom reading tables ── -->
+            <rect x="340" y="560" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="358" cy="552" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="388" cy="552" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="358" cy="603" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="388" cy="603" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <rect x="480" y="560" width="65" height="35" fill="#e8e4db" stroke="#c4b9a8" stroke-width="1" rx="3"/>
+            <circle cx="498" cy="552" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="528" cy="552" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="498" cy="603" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+            <circle cx="528" cy="603" r="5" fill="none" stroke="#c4b9a8" stroke-width="1"/>
+
+            <!-- ═══════ STAIRS ═══════ -->
+            <rect x="760" y="550" width="150" height="55" fill="url(#stairHatch)" stroke="#3d3529" stroke-width="1.5" rx="4"/>
+            <text x="835" y="583" text-anchor="middle" font-size="10" fill="#3d3529" font-family="Segoe UI, system-ui, sans-serif" font-weight="600">Stairs</text>
+
+            <!-- ── Footer label ── -->
+            <text x="895" y="612" text-anchor="end" font-size="9" fill="#c4b9a8" font-family="Segoe UI, system-ui, sans-serif">Ground Floor</text>
+        </svg>
+        <!-- Shelf hotspots are placed by JS -->
+    </div>
+
+    <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Science</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Literature</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#059669"></div> Engineering</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div> History</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red);border-radius:50%"></div> Has misplaced books</div>
+    </div>
+</div>
+
+<!-- Side panel -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="side-panel" id="side-panel">
+    <div class="panel-header">
+        <div class="panel-dot" id="panel-dot"></div>
+        <div>
+            <div class="panel-title" id="panel-title">Shelf A</div>
+            <div class="panel-subtitle" id="panel-subtitle">Science</div>
+        </div>
+        <button class="panel-close" onclick="closePanel()">&times;</button>
+    </div>
+    <div class="panel-body" id="panel-body">
+        <div class="panel-empty">Select a shelf to view its books.</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLORS = {
+    'Science':     '#2563eb',
+    'Literature':  '#7c3aed',
+    'Engineering': '#059669',
+    'History':     '#d97706',
+};
+
+/*
+ * Hotspot positions as percentages of the floor-plan container.
+ * Aligned to the SVG shelf zone rectangles (viewBox 960x640).
+ */
+const POSITIONS = {
+    'A': { left: '24%', top: '13%' },
+    'B': { left: '55%', top: '13%' },
+    'C': { left: '24%', top: '59%' },
+    'D': { left: '55%', top: '59%' },
+};
+
+let activeShelfId = null;
+
+async function loadMap() {
+    const res = await fetch('/api/shelves');
+    const data = await res.json();
+    const shelves = data.shelves;
+
+    let totalBooks = 0, totalMisplaced = 0;
+    shelves.forEach(s => { totalBooks += s.book_count; totalMisplaced += s.misplaced_count; });
+
+    document.getElementById('map-info').innerHTML =
+        `<div class="map-stat"><div class="map-stat-value">${shelves.length}</div><div class="map-stat-label">Shelves</div></div>` +
+        `<div class="map-stat"><div class="map-stat-value">${totalBooks}</div><div class="map-stat-label">Books on shelves</div></div>` +
+        `<div class="map-stat"><div class="map-stat-value" style="color:${totalMisplaced > 0 ? 'var(--red)' : 'var(--green)'}">${totalMisplaced}</div><div class="map-stat-label">Misplaced</div></div>`;
+
+    document.querySelectorAll('.shelf-spot').forEach(el => el.remove());
+
+    const floor = document.getElementById('floor-plan');
+
+    // Check if the URL has ?highlight=A (or B, C, D).
+    // This is set by the "View on Map" link on the search page.
+    const params = new URLSearchParams(window.location.search);
+    const highlight = params.get('highlight');
+
+    shelves.forEach(s => {
+        const cat = s.category;
+        const color = COLORS[cat] || '#666';
+        const pos = POSITIONS[s.shelf_code] || { left: '10%', top: '10%' };
+        const catClass = 'spot-' + cat.toLowerCase();
+
+        const spot = document.createElement('div');
+        spot.className = `shelf-spot ${catClass} ${s.misplaced_count > 0 ? 'has-misplaced' : ''}`;
+        spot.style.left = pos.left;
+        spot.style.top = pos.top;
+        spot.setAttribute('data-id', s.id);
+        spot.onclick = () => openShelf(s.id, s.shelf_name, s.category, color);
+
+        spot.innerHTML =
+            `<div class="spot-code">${s.shelf_name}</div>
+             <div class="spot-cat">${cat}</div>
+             <div class="spot-count">${s.book_count} books</div>
+             <div class="spot-alert">${s.misplaced_count} misplaced</div>`;
+
+        floor.appendChild(spot);
+    });
+
+    // If a shelf was highlighted via URL, draw the path and open its panel
+    if (highlight) {
+        highlightShelf(highlight);
+        const shelf = shelves.find(s => s.shelf_code === highlight);
+        if (shelf) {
+            const color = COLORS[shelf.category] || '#666';
+            openShelf(shelf.id, shelf.shelf_name, shelf.category, color);
+        }
+    }
+}
+
+async function openShelf(shelfId, name, category, color) {
+    activeShelfId = shelfId;
+
+    document.querySelectorAll('.shelf-spot').forEach(el => el.classList.remove('active'));
+    const activeSpot = document.querySelector(`.shelf-spot[data-id="${shelfId}"]`);
+    if (activeSpot) activeSpot.classList.add('active');
+
+    document.getElementById('panel-dot').style.background = color;
+    document.getElementById('panel-title').textContent = name;
+    document.getElementById('panel-subtitle').textContent = category;
+
+    document.getElementById('side-panel').classList.add('open');
+    document.getElementById('overlay').classList.add('visible');
+
+    document.getElementById('panel-body').innerHTML = '<div class="panel-empty">Loading...</div>';
+
+    const res = await fetch(`/api/shelf/${shelfId}/books`);
+    const data = await res.json();
+    const books = data.books;
+
+    if (books.length === 0) {
+        document.getElementById('panel-body').innerHTML = '<div class="panel-empty">No books currently on this shelf.</div>';
+        return;
+    }
+
+    let html = '';
+    books.forEach(b => {
+        const isMisplaced = b.status === 'misplaced';
+        html += `
+            <div class="book-item ${isMisplaced ? 'misplaced' : ''}">
+                <div class="book-title">${b.title}</div>
+                <div class="book-author">${b.author}</div>
+                <div class="book-meta">
+                    <span class="book-rfid">${b.rfid_tag}</span>
+                    <span class="book-status ${isMisplaced ? 'wrong' : 'ok'}">${isMisplaced ? 'Misplaced' : 'Correct'}</span>
+                </div>
+                ${isMisplaced ? `<div class="book-expected">Should be on: ${b.expected_shelf}</div>` : ''}
+            </div>`;
+    });
+
+    document.getElementById('panel-body').innerHTML = html;
+}
+
+function closePanel() {
+    document.getElementById('side-panel').classList.remove('open');
+    document.getElementById('overlay').classList.remove('visible');
+    document.querySelectorAll('.shelf-spot').forEach(el => el.classList.remove('active'));
+    activeShelfId = null;
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+
+/*
+ * highlightShelf(code)
+ * Draws an animated SVG path from the entrance to the target shelf.
+ *
+ * How it works:
+ *   1. Look up a pre-defined walking route for the shelf code (A/B/C/D).
+ *      Each route is an SVG path string — a series of "move to" and "line to"
+ *      commands using coordinates from our floor plan's viewBox (960×640).
+ *
+ *   2. Create a <path> element, append it to the SVG, then measure its
+ *      total pixel length with getTotalLength().
+ *
+ *   3. Set stroke-dasharray and stroke-dashoffset to that length.
+ *      This makes the entire stroke invisible (the "gap" covers everything).
+ *      Then the CSS animation reduces dashoffset to 0, gradually revealing
+ *      the stroke from start to end — the "drawing" effect.
+ *
+ *   4. Add a pulsing circle at the destination so the user's eye lands there.
+ */
+function highlightShelf(code) {
+    // Remove any previous path + markers
+    document.querySelectorAll('.nav-path, .nav-marker-ring, .nav-marker-dot, .nav-start')
+        .forEach(el => el.remove());
+
+    // Walking routes in SVG viewBox coordinates.
+    // Each path: M = move to start, L = line to next point.
+    // Routes go: entrance → down into hall → turn toward the shelf.
+    const routes = {
+        'A': 'M 480,25 L 480,65 L 312,65 L 312,80',
+        'B': 'M 480,25 L 480,65 L 612,65 L 612,80',
+        'C': 'M 480,25 L 480,65 L 480,350 L 312,350 L 312,375',
+        'D': 'M 480,25 L 480,65 L 480,350 L 612,350 L 612,375',
+    };
+
+    // End-point coordinates for the destination marker
+    const endpoints = {
+        'A': [312, 80],
+        'B': [612, 80],
+        'C': [312, 375],
+        'D': [612, 375],
+    };
+
+    const route = routes[code];
+    if (!route) return;
+
+    const svg = document.querySelector('.plan-svg');
+    const ns = 'http://www.w3.org/2000/svg';
+
+    // Create the animated path line
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', route);
+    path.setAttribute('class', 'nav-path');
+    svg.appendChild(path);
+
+    // Measure the path length, then set the CSS variable so the
+    // dash animation knows how far to animate.
+    const len = path.getTotalLength();
+    path.style.setProperty('--path-len', len);
+
+    // Small circle at the starting point (entrance)
+    const start = document.createElementNS(ns, 'circle');
+    start.setAttribute('cx', '480');
+    start.setAttribute('cy', '25');
+    start.setAttribute('r', '4');
+    start.setAttribute('class', 'nav-start');
+    svg.appendChild(start);
+
+    // Pulsing ring + solid dot at the destination
+    const [ex, ey] = endpoints[code];
+
+    const ring = document.createElementNS(ns, 'circle');
+    ring.setAttribute('cx', ex);
+    ring.setAttribute('cy', ey);
+    ring.setAttribute('r', '14');
+    ring.setAttribute('class', 'nav-marker-ring');
+    svg.appendChild(ring);
+
+    const dot = document.createElementNS(ns, 'circle');
+    dot.setAttribute('cx', ex);
+    dot.setAttribute('cy', ey);
+    dot.setAttribute('r', '5');
+    dot.setAttribute('class', 'nav-marker-dot');
+    svg.appendChild(dot);
+}
+
+loadMap();
+</script>
+{% endblock %}
